@@ -4,10 +4,9 @@ import stats
 import sys
 import pylab
 
-#year=sys.argv[1]
-#jobs=stats.getJobs(['stats/*'+year])
+events=sys.argv[1]
 
-jobs=stats.getJobs(['stats/events.*Feb_19_2014'])
+jobs=stats.getJobs(['stats/events.'+events])
 
 binwidth=1
 
@@ -47,9 +46,3 @@ for queue in sorted(queues.keys()):
   pylab.xlim((pylab.xlim()[0],pylab.xlim()[1]+2*binwidth))
   pylab.savefig("JobTime/Runtime."+queue+".png")
   pylab.clf()
-
-  for job in Runtimes:
-    print "%8.2f" % (job)
-  print
-  print
-
