@@ -5,7 +5,7 @@ import glob
 import time
 
 class Job(object):
-  def __init__(self,stats):
+  def __init__(self,stats,Rename=False):
     try:
       # The status of this event entry
       self.status=stats[4]
@@ -20,6 +20,18 @@ class Job(object):
 
       #requested resources
       self.queue=stats[11].replace("[","").replace("]","").replace(":1","")
+      if(Rename):
+        if(self.queue == 'idist' or self.queue=='ndist'):
+          self.queue = 'distributed'
+        if(self.queue == 'idist_small' or self.queue == 'ndist_small'):
+          self.queue = 'dist_small'
+        if(self.queue == 'idist_big' or self.queue == 'ndist_big'):
+          self.queue = 'dist_big'
+        if(self.queue == 'ishared_large' or self.queue == 'nshared_large'):
+          self.queue = 'shared_large'
+        if(self.queue == 'ishared' or self.queue == 'nshared'):
+          self.queue = 'shared'
+
       self.memory=stats[37]
       self.partition=stats[33]
       self.features=stats[22].replace("[","").replace("]","")
@@ -63,6 +75,9 @@ class Job(object):
       self.submitDate = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(self.submit))
       self.startDate  = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(self.start))
       self.endDate  = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(self.end))
+
+      self.su=getSUCharged(self.queue,self.runtime,self.cpus,self.qos)
+
     except:
       #there are cases where a line in the event log has no
       # reasonable information or when a value (like an epoch time)
@@ -84,6 +99,12 @@ class Job(object):
     except:
       return self
 
+def sumSU(jobs):
+  suCharged = 0.
+  for job in jobs:
+    suCharged = suCharged + job.su
+
+  return suCharged
 
 # Make dictionaries (hastables) based on the 'key'.
 # key can be any of the above attributes and must be provided
@@ -117,15 +138,38 @@ def Collect(myStats,key,stat=None):
 # Read the event logs
 # The input is a list of globular-aware file names with paths, like
 # ['stats/events.*Feb*2014','stats/events.*Mar*2014']
-def getJobs(files):
+def getJobs(files,Rename=False):
   theFiles = [glob.glob(thisFile) for thisFile in files]
   #make one list
   theStats = [y for x in theFiles for y in x]
   Stats = list()
   for f in theStats:
     with open(f) as myFile:
-      [Stats.append(Job(l.split())) for l in (line.strip() for line in myFile) if l]
+      [Stats.append(Job(l.split(),Rename)) for l in (line.strip() for line in myFile) if l]
   return Stats
+
+def getSUCharged(queue,runtime,cpus,qos,gpus=0.):
+  qosFac=1.0
+  if(qos=='low'):
+    qosFac=0.25
+
+
+  if (queue == 'idist' or queue=='ndist' or queue=='distributed'
+      or queue=='idist_short'):
+    return runtime*cpus*qosFac*1.0
+  elif (queue=='ishared' or queue=='nshared' or queue=='shared'):
+    return runtime*cpus*qosFac*0.5
+  elif (queue=='ishared_large' or queue=='nshared_large' or queue=='shared_large'
+      or queue=='idist_big' or queue=='ndist_big' or queue=='dist_big'
+      or queue=='idist_small' or queue=='ndist_small' or queue=='dist_small'
+      or queue=='idist_fast' or queue=='ndist_fast' or queue=='dist_fast'):
+    return runtime*cpus*qosFac*1.5
+  elif (queue=='dist_amd' or queue=='shared_amd'):
+    return runtime*cpus*qosFac*0.75
+  elif (queue=='gpu' or queue=='gpu_short' or queue=='gpu_long'):
+    return runtime*qosFac*8.0
+  else:
+    return 0.0
 
 # Main is not programmed. See other scripts for example usage
 def main(argv):
