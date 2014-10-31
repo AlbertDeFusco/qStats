@@ -7,6 +7,10 @@ import time
 class Job(object):
   def __init__(self,stats,Rename=False):
     try:
+      # the date of the event
+      #self.epoch=int(stats[1].split(":")[0])
+      #self.day = time.strftime("%Y-%m-%d", time.gmtime(self.submit))
+
       # The status of this event entry
       self.status=stats[4]
 
@@ -53,7 +57,6 @@ class Job(object):
       self.submit=int(stats[12])
       self.eligible=int(stats[55])
 
-      #This is a problem. There is another field I can use
       if (self.start == 0):
         self.cputime=float(stats[32])
       else:
@@ -72,9 +75,13 @@ class Job(object):
       if(self.blocked<0.0):
         self.blocked = 0
 
-      self.submitDate = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(self.submit))
-      self.startDate  = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(self.start))
-      self.endDate  = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(self.end))
+      self.submitTime = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(self.submit))
+      self.startTime  = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(self.start))
+      self.endTime  = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(self.end))
+
+      self.submitDate = time.strftime("%Y-%m-%d", time.gmtime(self.submit))
+      self.startDate  = time.strftime("%Y-%m-%d", time.gmtime(self.start))
+      self.endDate  = time.strftime("%Y-%m-%d", time.gmtime(self.end))
 
       self.su=getSUCharged(self.queue,self.runtime,self.cpus,self.qos)
 
@@ -148,11 +155,12 @@ def getJobs(files,Rename=False):
       [Stats.append(Job(l.split(),Rename)) for l in (line.strip() for line in myFile) if l]
   return Stats
 
+# each queue has a different charge factor to convert
+# from cpu-hours to Service Units
 def getSUCharged(queue,runtime,cpus,qos,gpus=0.):
   qosFac=1.0
   if(qos=='low'):
     qosFac=0.25
-
 
   if (queue == 'idist' or queue=='ndist' or queue=='distributed'
       or queue=='idist_short'):
