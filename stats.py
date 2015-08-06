@@ -5,11 +5,22 @@ import glob
 import time
 
 class Job(object):
+# the constructor takes two arguemnts
+# stats  is a list of job stats as read by getJobs below
+# Rename requests that routed queues be renamed to the base routing queue
   def __init__(self,stats,Rename=False):
     try:
       # the date of the event
       #self.epoch=int(stats[1].split(":")[0])
       #self.day = time.strftime("%Y-%m-%d", time.gmtime(self.submit))
+      if stats[4] == 'JOBCANCEL':
+        raise TypeError
+      # epoch times; be careful! I have found cases where
+      # they come out as 0
+      if (int(stats[14]) == 0) or (int(stats[15]) == 0) or (int(stats[12]) == 0) or (int(stats[55]) == 0):
+        raise ValueError
+      if (int(stats[14]) < 0) or (int(stats[15]) < 0) or (int(stats[12]) < 0) or (int(stats[55]) < 0):
+        raise ValueError
 
       # The status of this event entry
       self.status=stats[4]
@@ -35,12 +46,15 @@ class Job(object):
           self.queue = 'shared_large'
         if(self.queue == 'ishared' or self.queue == 'nshared'):
           self.queue = 'shared'
+        if(self.queue == 'gpu_long' or self.queue == 'gpu_short'):
+	  self.queue = 'gpu'
 
       self.memory=stats[37]
       self.partition=stats[33]
       self.features=stats[22].replace("[","").replace("]","")
       self.qos=stats[26].split(":")[0]
       self.qosDelivered=stats[26].split(":")[1]
+      self.rsv=stats[43]
 
       self.nodes=int(stats[5])
       if self.nodes==0:
@@ -57,23 +71,23 @@ class Job(object):
       self.submit=int(stats[12])
       self.eligible=int(stats[55])
 
-      if (self.start == 0):
-        self.cputime=float(stats[32])
-      else:
-        self.cputime=(self.end - self.start) * self.cpus/60./60.
+      #if (self.start == 0):
+      #  self.cputime=float(stats[32])
+      #else:
+      self.cputime=(self.end - self.start) * self.cpus/60./60.
 
       self.runtime=self.cputime/self.cpus
       self.queued=self.eligible/60./60.
 
-      if (self.start == 0 or self.submit == 0):
-        self.wait=0
-        self.blocked=0
-      else:
-        self.wait=(self.start - self.submit) /60./60.
-        self.blocked=(self.start - self.submit - self.eligible) / 60./60.
+      #if (self.start == 0 or self.submit == 0):
+      #  self.wait=0
+      #  self.blocked=0
+      #else:
+      self.wait=(self.start - self.submit) /60./60.
+      self.blocked=(self.start - self.submit - self.eligible) / 60./60.
 
-      if(self.blocked<0.0):
-        self.blocked = 0
+      #if(self.blocked<0.0):
+      self.blocked = 0
 
       self.submitTime = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(self.submit))
       self.startTime  = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(self.start))
@@ -84,6 +98,12 @@ class Job(object):
       self.endDate  = time.strftime("%Y-%m-%d", time.gmtime(self.end))
 
       self.su=getSUCharged(self.queue,self.runtime,self.cpus,self.qos)
+
+    except ValueError:
+      pass
+
+    except TypeError:
+      pass
 
     except:
       #there are cases where a line in the event log has no
@@ -112,6 +132,22 @@ def sumSU(jobs):
     suCharged = suCharged + job.su
 
   return suCharged
+
+def avgWait(jobs):
+  wait=0.
+  for job in jobs:
+    wait = wait + job.wait
+
+  maxWait=max([job.wait for job in jobs])
+
+  return (wait/len(jobs)),maxWait
+
+def avgNCPU(jobs):
+  ncpus=0.
+  for job in jobs:
+    ncpus = ncpus + job.cpus
+
+  return ncpus/len(jobs)
 
 # Make dictionaries (hastables) based on the 'key'.
 # key can be any of the above attributes and must be provided
@@ -145,6 +181,7 @@ def Collect(myStats,key,stat=None):
 # Read the event logs
 # The input is a list of globular-aware file names with paths, like
 # ['stats/events.*Feb*2014','stats/events.*Mar*2014']
+# Rename requests that routed queues be renamed to the base routing queue
 def getJobs(files,Rename=False):
   theFiles = [glob.glob(thisFile) for thisFile in files]
   #make one list
